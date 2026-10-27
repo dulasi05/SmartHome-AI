@@ -25,9 +25,21 @@ export const getPipelineStatus = () =>
 export const getActivityHistory = (residentId = 'R1', hours = 24) =>
   api.get('/dashboard/activity-history', { params: { resident_id: residentId, hours } }).then(r => r.data);
 
-// ── Sensor events ─────────────────────────────────────────────────────────────
+// ── Sensor events & Hardware Ingestion ─────────────────────────────────────────
 export const getSensorEvents = (params = {}) =>
   api.get('/sensors/events', { params }).then(r => r.data);
+
+export const postSensorEvent = (eventData) =>
+  api.post('/sensors/events', eventData).then(r => r.data);
+
+export const getLiveSensorStatus = () =>
+  api.get('/sensors/live-status').then(r => r.data);
+
+export const getDeviceStatus = () =>
+  api.get('/sensors/device-status').then(r => r.data);
+
+export const sendSensorHeartbeat = (data) =>
+  api.post('/sensors/heartbeat', data).then(r => r.data);
 
 export const simulateSensorEvents = (count = 10, residentId = 'R1') =>
   api.post('/sensors/simulate', null, { params: { count, resident_id: residentId } }).then(r => r.data);
@@ -37,6 +49,9 @@ export const generateHistoricalData = (days = 3, residentId = 'R1') =>
 
 export const getSensorMetadata = () =>
   api.get('/sensors/metadata').then(r => r.data);
+
+export const saveSensorMetadata = (data) =>
+  api.post('/sensors/metadata', data).then(r => r.data);
 
 // ── Predictions ───────────────────────────────────────────────────────────────
 export const runPrediction = (residentId = 'R1', windowSize = 30) =>

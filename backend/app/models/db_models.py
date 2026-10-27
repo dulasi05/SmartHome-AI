@@ -135,3 +135,22 @@ class DatasetUpload(Base):
     error_message = Column(Text, nullable=True)
     stats = Column(JSON, nullable=True)  # preprocessing statistics
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class DeviceNode(Base):
+    """Registered hardware devices (e.g. ESP32, Raspberry Pi) and their heartbeat state."""
+    __tablename__ = "device_nodes"
+
+    id = Column(Integer, primary_key=True, index=True)
+    device_id = Column(String(64), unique=True, nullable=False, index=True)
+    device_type = Column(String(64), nullable=False, default="esp32")
+    firmware_version = Column(String(32), nullable=True)
+    ip_address = Column(String(64), nullable=True)
+    mac_address = Column(String(64), nullable=True)
+    battery_level = Column(Float, nullable=True)
+    rssi = Column(Integer, nullable=True)
+    last_seen = Column(DateTime, nullable=False, default=datetime.utcnow)
+    is_online = Column(Boolean, default=True)
+    event_count = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+

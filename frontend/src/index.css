@@ -485,6 +485,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--border-active); 
 .badge-demo { background: var(--demo-bg); color: var(--demo); border: 1px solid rgba(168, 85, 247, 0.2); }
 .badge-neutral { background: rgba(74, 88, 128, 0.2); color: var(--text-secondary); border: 1px solid var(--border); }
 .badge-cyan { background: rgba(0, 212, 232, 0.1); color: var(--accent-cyan); border: 1px solid rgba(0, 212, 232, 0.2); }
+.badge-hardware { background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 700; }
 
 /* ══════════════════════════════════════
    Buttons
@@ -790,6 +791,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--border-active); 
   background: var(--bg-card);
 }
 
+.event-row.source-hardware { border-left: 3px solid var(--success); }
 .event-row.source-simulator { border-left: 3px solid var(--demo); }
 .event-row.source-dataset { border-left: 3px solid var(--accent-cyan); }
 .event-row.source-api { border-left: 3px solid var(--accent-emerald); }

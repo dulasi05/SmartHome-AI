@@ -8,8 +8,7 @@ import {
   RefreshCw, Play, Cpu, CheckCircle2, Clock
 } from 'lucide-react';
 import {
-  PieChart, Pie, Cell, Tooltip, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend
+  PieChart, Pie, Cell, Tooltip, ResponsiveContainer
 } from 'recharts';
 import {
   getDashboardStats, simulateSensorEvents, runPrediction,
@@ -32,10 +31,6 @@ const ACTIVITY_EMOJIS = {
 };
 
 const SEVERITY_COLOR = { low: 'info', medium: 'warning', high: 'error', critical: 'error' };
-
-function ActivityEmoji({ activity }) {
-  return <span className="activity-icon">{ACTIVITY_EMOJIS[activity] || '🏠'}</span>;
-}
 
 export default function OverviewDashboard() {
   const { addToast } = useToast();
@@ -95,11 +90,7 @@ export default function OverviewDashboard() {
       }))
     : [];
 
-  // Prepare bar chart data from history
-  const barData = activityHistory?.timeline?.slice(-12).map(t => ({
-    hour: t.hour.slice(11, 16),
-    ...t.activities,
-  })) || [];
+
 
   const currentAct = stats?.current_activity;
   const activeAlerts = stats?.anomalies?.active || 0;
@@ -143,9 +134,8 @@ export default function OverviewDashboard() {
               {stats?.sensor_events?.total?.toLocaleString() || 0}
             </div>
             <div className="stat-label">Total Sensor Events</div>
-            <div className="stat-change">
-              {stats?.sensor_events?.recent || 0} in last 24h
-              · {stats?.sensor_events?.simulated || 0} simulated
+            <div className="stat-change" style={{ fontSize: 11 }}>
+              {stats?.sensor_events?.recent || 0} in 24h · {stats?.sensor_events?.hardware || 0} hardware · {stats?.sensor_events?.simulated || 0} simulated · {stats?.sensor_events?.from_dataset || 0} dataset
             </div>
           </div>
 

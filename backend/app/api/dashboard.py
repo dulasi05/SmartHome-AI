@@ -11,7 +11,7 @@ from sqlalchemy import func
 
 from app.core.database import get_db
 from app.models.db_models import (
-    SensorEvent, ActivityPrediction, AnomalyAlert, DatasetUpload, RoutineProfile
+    SensorEvent, ActivityPrediction, AnomalyAlert, DatasetUpload, RoutineProfile, DeviceNode
 )
 from app.services.intelligence import engine as ai_engine
 
@@ -34,6 +34,8 @@ def get_dashboard_stats(
     recent_events = db.query(SensorEvent).filter(SensorEvent.timestamp >= cutoff).count()
     simulated_count = db.query(SensorEvent).filter(SensorEvent.source == "simulator").count()
     dataset_count = db.query(SensorEvent).filter(SensorEvent.source == "dataset").count()
+    hardware_count = db.query(SensorEvent).filter(SensorEvent.source == "hardware").count()
+    api_count = db.query(SensorEvent).filter(SensorEvent.source == "api").count()
 
     # Predictions
     total_preds = db.query(ActivityPrediction).count()
@@ -98,6 +100,8 @@ def get_dashboard_stats(
             "recent": recent_events,
             "simulated": simulated_count,
             "from_dataset": dataset_count,
+            "hardware": hardware_count,
+            "api": api_count,
         },
         "predictions": {
             "total": total_preds,
@@ -159,16 +163,33 @@ def _get_pipeline_status(db: Session) -> dict:
     has_events = db.query(SensorEvent).count() > 0
     has_preds = db.query(ActivityPrediction).count() > 0
     has_db = True  # If we got here, DB is working
+    now = datetime.utcnow()
+    has_online_hardware = (
+        db.query(DeviceNode)
+        .filter(DeviceNode.last_seen >= now - timedelta(seconds=60))
+        .first() is not None
+    )
+    hardware_event_count = db.query(SensorEvent).filter(SensorEvent.source == "hardware").count()
+
+    data_tech = (
+        "Physical Hardware (ESP32), Simulator & Datasets"
+        if has_online_hardware or hardware_event_count > 0
+        else "Sensor events, ARAS/CASAS datasets, Simulator"
+    )
+    data_status = "connected" if has_online_hardware else ("connected" if has_events else "idle")
+    data_label = "Hardware Active" if has_online_hardware else ("Connected" if has_events else "Idle")
 
     return {
         "layers": [
             {
                 "id": 1,
                 "name": "Data Layer",
-                "technology": "Sensor events, ARAS/CASAS datasets, Simulator",
-                "status": "connected" if has_events else "idle",
-                "status_label": "Connected" if has_events else "Idle",
+                "technology": data_tech,
+                "status": data_status,
+                "status_label": data_label,
                 "event_count": db.query(SensorEvent).count(),
+                "hardware_event_count": hardware_event_count,
+                "hardware_online": has_online_hardware,
             },
             {
                 "id": 2,
