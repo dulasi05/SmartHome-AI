@@ -11,7 +11,9 @@ import SystemArchitecture from './pages/SystemArchitecture';
 import ModelTraining from './pages/ModelTraining';
 import AlertCentre from './pages/AlertCentre';
 import Explainability from './pages/Explainability';
+import Settings from './pages/Settings';
 import { ToastProvider } from './hooks/useToast';
+import { ThemeProvider } from './context/ThemeContext';
 import { getAnomalyAlerts, getPhase2Alerts } from './services/api';
 
 function AppContent() {
@@ -49,6 +51,8 @@ function AppContent() {
           <Route path="/training" element={<ModelTraining />} />
           <Route path="/alerts" element={<AlertCentre />} />
           <Route path="/explain" element={<Explainability />} />
+          <Route path="/history" element={<ActivityRecognition />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
     </div>
@@ -58,9 +62,12 @@ function AppContent() {
 export default function App() {
   return (
     <Router>
-      <ToastProvider>
-        <AppContent />
-      </ToastProvider>
+      <ThemeProvider>
+        <ToastProvider>
+          <AppContent />
+        </ToastProvider>
+      </ThemeProvider>
     </Router>
   );
 }
+

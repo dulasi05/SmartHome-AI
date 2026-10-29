@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from app.core.database import init_db
+from app.core.database import init_db, get_active_db_info
 from app.api import sensors, datasets, predictions, dashboard, ml_routes
 
 logging.basicConfig(level=logging.INFO)
@@ -33,13 +33,13 @@ app = FastAPI(
     title="Smart Home Activity Recognition System",
     description=(
         "A 5-layer smart home activity recognition prototype using "
-        "ARAS/CASAS datasets, Powerformer/WC-MHA (demo mode), and SQLite storage."
+        "ARAS/CASAS datasets, Powerformer/WC-MHA (demo mode), and MySQL/SQLite storage."
     ),
     version="1.0.0",
     lifespan=lifespan,
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
 )
 
 # ─── CORS ─────────────────────────────────────────────────────────────────────
@@ -65,7 +65,27 @@ def health_check():
         "status": "ok",
         "service": "Smart Home Activity Recognition System",
         "version": "1.0.0",
+        "database": get_active_db_info(),
     }
+
+
+# Backwards-compatible aliases for documentation endpoints under /api prefix
+@app.get("/api/docs", include_in_schema=False)
+def api_docs_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/api/redoc", include_in_schema=False)
+def api_redoc_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/redoc")
+
+
+@app.get("/api/openapi.json", include_in_schema=False)
+def api_openapi_redirect():
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/openapi.json")
 
 
 @app.get("/api/download-zip")
@@ -88,5 +108,19 @@ if os.path.isdir(FRONTEND_BUILD):
 
     @app.get("/{full_path:path}")
     def serve_frontend(full_path: str):
+        from fastapi import HTTPException
+        clean_path = full_path.lstrip("/")
+        # Never let the SPA catch-all intercept API, docs, redoc, or openapi.json routes
+        if clean_path.startswith("api/") or clean_path in ("docs", "redoc", "openapi.json"):
+            raise HTTPException(status_code=404, detail="Not Found")
+
+        # Serve static assets from dist root if they exist (e.g. favicon.ico)
+        dist_asset = os.path.join(FRONTEND_BUILD, clean_path)
+        if clean_path and os.path.isfile(dist_asset):
+            return FileResponse(dist_asset)
+
+        # Fallback to SPA index.html for frontend client routing
         index = os.path.join(FRONTEND_BUILD, "index.html")
-        return FileResponse(index)
+        if os.path.isfile(index):
+            return FileResponse(index)
+        raise HTTPException(status_code=404, detail="Frontend index.html not found")

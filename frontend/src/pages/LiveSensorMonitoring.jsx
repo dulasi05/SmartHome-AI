@@ -15,7 +15,8 @@ import {
   getSensorMetadata,
   getLiveSensorStatus,
   getDeviceStatus,
-  postSensorEvent
+  postSensorEvent,
+  sendDevTestHardwareEvent
 } from '../services/api';
 import { useToast } from '../hooks/useToast';
 
@@ -70,6 +71,7 @@ export default function LiveSensorMonitoring() {
     device_id: 'esp32-node-01'
   });
   const [submittingTest, setSubmittingTest] = useState(false);
+  const [testResult, setTestResult] = useState(null);
 
   const pollRef = useRef(null);
 
@@ -138,13 +140,13 @@ export default function LiveSensorMonitoring() {
     e.preventDefault();
     setSubmittingTest(true);
     try {
-      const res = await postSensorEvent(testPayload);
+      const res = await sendDevTestHardwareEvent(testPayload);
+      setTestResult(res);
       if (res.status === 'duplicate_ignored') {
-        addToast(`ℹ️ ${res.message}`, 'warning');
+        addToast(`ℹ️ ${res.message || 'Duplicate event suppressed'}`, 'warning');
       } else {
         addToast(`✅ Ingested hardware event: ${res.sensor_id} (${res.sensor_state})`, 'success');
       }
-      setShowTestModal(false);
       await fetchAllData();
     } catch (err) {
       addToast(`Error: ${err.response?.data?.detail || err.message}`, 'error');
@@ -167,7 +169,7 @@ export default function LiveSensorMonitoring() {
         <div className="page-header-inner">
           <div>
             <h2>Live Sensor Monitoring</h2>
-            <p>Real-time physical IoT hardware & ambient sensor stream — Layer 1: Data Layer</p>
+            <p>Real-time physical IoT sensors and home activity stream</p>
           </div>
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
             {polling && (
@@ -537,95 +539,211 @@ export default function LiveSensorMonitoring() {
           background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000,
         }}>
-          <div className="card" style={{ maxWidth: 500, width: '90%', padding: 24, boxShadow: 'var(--shadow-lg)' }}>
+          <div className="card" style={{ maxWidth: 540, width: '92%', padding: 24, boxShadow: 'var(--shadow-lg)' }}>
             <div className="card-header" style={{ padding: 0, marginBottom: 16 }}>
               <div className="card-title" style={{ fontSize: 16 }}>
                 <Radio size={18} color="var(--success)" /> Ingest Physical Sensor Test Event
               </div>
-              <button className="btn btn-ghost btn-sm" onClick={() => setShowTestModal(false)}>✕</button>
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setShowTestModal(false); setTestResult(null); }}
+              >
+                ✕
+              </button>
             </div>
+
             <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
-              Simulate an incoming HTTP POST payload from an ESP32 or physical sensor node. Sets <code>source="hardware"</code> to test pipeline end-to-end.
+              Simulates a physical IoT node event via the secure development test pipeline. <code>DEVICE_API_KEY</code> is validated server-side without exposure to the browser.
             </p>
-            <form onSubmit={handleSendTestHardwareEvent}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Sensor ID</label>
-                  <input
-                    value={testPayload.sensor_id}
-                    onChange={e => setTestPayload({ ...testPayload, sensor_id: e.target.value.toUpperCase() })}
-                    placeholder="e.g. PIR_LIVING"
-                    required
-                    style={{ width: '100%' }}
-                  />
+
+            {testResult ? (
+              <div>
+                <div style={{
+                  background: testResult.status === 'duplicate_ignored' ? 'rgba(234, 179, 8, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                  border: `1px solid ${testResult.status === 'duplicate_ignored' ? 'rgba(234, 179, 8, 0.4)' : 'rgba(34, 197, 94, 0.4)'}`,
+                  borderRadius: 8,
+                  padding: '12px 16px',
+                  marginBottom: 16,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <Radio size={20} color={testResult.status === 'duplicate_ignored' ? '#eab308' : '#22c55e'} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: testResult.status === 'duplicate_ignored' ? '#eab308' : '#22c55e' }}>
+                        {testResult.status === 'duplicate_ignored' ? 'Duplicate Event Ignored (Debounced)' : 'Physical Event Ingested Successfully'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                        {testResult.message || testResult.note || 'Persisted to active database backend'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`badge ${testResult.status === 'duplicate_ignored' ? 'badge-demo' : 'badge-hardware'}`} style={{ textTransform: 'uppercase', fontSize: 11 }}>
+                    {testResult.status}
+                  </span>
                 </div>
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Sensor Type</label>
-                  <select
-                    value={testPayload.sensor_type}
-                    onChange={e => setTestPayload({ ...testPayload, sensor_type: e.target.value })}
-                    style={{ width: '100%' }}
+
+                {/* Realistic event attributes grid */}
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, 1fr)',
+                  gap: 10,
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                  padding: 14,
+                  fontSize: 12,
+                  marginBottom: 16
+                }}>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Database Event ID</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>#{testResult.id || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Sensor Identifier</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--primary-light)' }}>{testResult.sensor_id}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Sensor State</span>
+                    <span><StateTag state={testResult.sensor_state} /></span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Hardware Device Node</span>
+                    <span style={{ fontFamily: 'var(--font-mono)' }}>{testResult.device_node_id || testResult.device_id || 'N/A'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Location</span>
+                    <span>{testResult.location || 'Unassigned'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Resident ID</span>
+                    <span>{testResult.resident_id || 'R1'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Raw Value</span>
+                    <span>{testResult.raw_value !== null && testResult.raw_value !== undefined ? testResult.raw_value : '—'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Debounce State</span>
+                    <span style={{ color: testResult.debounced ? 'var(--warning)' : 'var(--success)' }}>
+                      {testResult.debounced ? '⚡ Suppressed (< 0.5s)' : '✅ Accepted & Written'}
+                    </span>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Authentication Mode</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+                      🔒 Server-side verified (mode: <code>{testResult.auth}</code>) — <code>DEVICE_API_KEY</code> applied server-side
+                    </span>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <span style={{ color: 'var(--text-muted)', display: 'block', fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>Timestamp</span>
+                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11 }}>{testResult.timestamp || new Date().toISOString()}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => setTestResult(null)}
                   >
-                    <option value="motion">motion (PIR)</option>
-                    <option value="door">door (contact)</option>
-                    <option value="temperature">temperature</option>
-                    <option value="appliance">appliance</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Sensor State</label>
-                  <select
-                    value={testPayload.sensor_state}
-                    onChange={e => setTestPayload({ ...testPayload, sensor_state: e.target.value })}
-                    style={{ width: '100%' }}
+                    Send Another Event
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    onClick={() => { setShowTestModal(false); setTestResult(null); }}
                   >
-                    <option value="ON">ON (Detected)</option>
-                    <option value="OFF">OFF (Clear)</option>
-                    <option value="OPEN">OPEN</option>
-                    <option value="CLOSED">CLOSED</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Device Node ID</label>
-                  <input
-                    value={testPayload.device_id}
-                    onChange={e => setTestPayload({ ...testPayload, device_id: e.target.value })}
-                    placeholder="esp32-node-01"
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Raw Sensor Value (optional)</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={testPayload.raw_value}
-                    onChange={e => setTestPayload({ ...testPayload, raw_value: parseFloat(e.target.value) || 0 })}
-                    placeholder="1.0"
-                    style={{ width: '100%' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Resident ID</label>
-                  <select
-                    value={testPayload.resident_id}
-                    onChange={e => setTestPayload({ ...testPayload, resident_id: e.target.value })}
-                    style={{ width: '100%' }}
-                  >
-                    <option value="R1">R1</option>
-                    <option value="R2">R2</option>
-                  </select>
+                    Done
+                  </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
-                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowTestModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary btn-sm" disabled={submittingTest}>
-                  {submittingTest ? 'Ingesting…' : 'Send Hardware Event'}
-                </button>
-              </div>
-            </form>
+            ) : (
+              <form onSubmit={handleSendTestHardwareEvent}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Sensor ID</label>
+                    <input
+                      value={testPayload.sensor_id}
+                      onChange={e => setTestPayload({ ...testPayload, sensor_id: e.target.value.toUpperCase() })}
+                      placeholder="e.g. PIR_LIVING"
+                      required
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Sensor Type</label>
+                    <select
+                      value={testPayload.sensor_type}
+                      onChange={e => setTestPayload({ ...testPayload, sensor_type: e.target.value })}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="motion">motion (PIR)</option>
+                      <option value="door">door (contact)</option>
+                      <option value="temperature">temperature</option>
+                      <option value="appliance">appliance</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Sensor State</label>
+                    <select
+                      value={testPayload.sensor_state}
+                      onChange={e => setTestPayload({ ...testPayload, sensor_state: e.target.value })}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="ON">ON (Detected)</option>
+                      <option value="OFF">OFF (Clear)</option>
+                      <option value="OPEN">OPEN</option>
+                      <option value="CLOSED">CLOSED</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Device Node ID</label>
+                    <input
+                      value={testPayload.device_id}
+                      onChange={e => setTestPayload({ ...testPayload, device_id: e.target.value })}
+                      placeholder="esp32-node-01"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Raw Sensor Value (optional)</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={testPayload.raw_value}
+                      onChange={e => setTestPayload({ ...testPayload, raw_value: parseFloat(e.target.value) || 0 })}
+                      placeholder="1.0"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: 11, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>Resident ID</label>
+                    <select
+                      value={testPayload.resident_id}
+                      onChange={e => setTestPayload({ ...testPayload, resident_id: e.target.value })}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="R1">R1</option>
+                      <option value="R2">R2</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { setShowTestModal(false); setTestResult(null); }}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={submittingTest}>
+                    {submittingTest ? 'Ingesting…' : 'Send Hardware Event'}
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

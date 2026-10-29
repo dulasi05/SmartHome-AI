@@ -65,13 +65,16 @@ This guide describes how to connect physical ambient IoT sensors (such as an ESP
 #### Request Schema
 ```json
 {
+  "event_id": "esp32-node-01-10492",
   "sensor_id": "PIR_LIVING",
   "sensor_type": "motion",
   "sensor_state": "ON",
+  "location": "Living Room",
   "source": "hardware",
   "resident_id": "R1",
   "raw_value": 1.0,
   "device_id": "esp32-node-01",
+  "device_node_id": "esp32-node-01",
   "timestamp": "2026-10-27T12:00:00.000Z"
 }
 ```
@@ -83,8 +86,10 @@ This guide describes how to connect physical ambient IoT sensors (such as an ESP
 | `sensor_type` | `string` | **Yes** | Modality: `motion`, `door`, `temperature`, `appliance`. |
 | `sensor_state` | `string` | **Yes** | State: `ON`, `OFF`, `OPEN`, `CLOSED`, `DETECTED`. |
 | `source` | `string` | **Yes** | Must be `"hardware"` for physical devices. |
+| `location` | `string` | No | Room or zone (e.g. `Living Room`, `Kitchen`). Automatically registers in sensor metadata. |
+| `event_id` | `string` | No | Unique client-generated event identifier for idempotency/deduplication. |
+| `device_id` / `device_node_id` | `string` | No | Controller hardware identifier (e.g. `esp32-living-room`). |
 | `raw_value` | `float` | No | Numeric analog/digital reading (e.g. `23.5` for temperature, `1.0` for motion). |
-| `device_id` | `string` | No | Controller hardware identifier (e.g. `esp32-living-room`). |
 | `timestamp` | `string` | No | ISO-8601 UTC timestamp. If omitted, backend uses server UTC timestamp. |
 | `resident_id` | `string` | No | Default `"R1"`. |
 | `activity_label` | `string` | No | Left empty for raw hardware; raw motion does **not** assume an activity. |
@@ -109,39 +114,74 @@ This guide describes how to connect physical ambient IoT sensors (such as an ESP
 
 ---
 
-## 3. Recommended Hardware Specifications
+## 3. Local Network Configuration (ESP32 to Host PC)
 
-Before finalized wiring, ensure you obtain the following information:
-1. **Controller Board**: ESP32-WROOM-32, ESP32-S3, or Raspberry Pi Pico W.
-2. **Logic Voltage**: Verify whether sensors are 3.3V or 5V logic.
-   - *Caution*: Standard HC-SR501 PIR sensors are powered by 5V, but their OUT pin outputs 3.3V (safe for ESP32 GPIO).
-   - Some miniature PIR sensors (AM312) operate natively on 3.3V VCC.
-3. **PIR Sensor Model & Trigger Mode**:
-   - Set HC-SR501 jumper to **"H" (Repeatable Trigger)** so the sensor maintains HIGH while continuous motion occurs.
-   - Set time delay trimpot to minimum (~2.5s) to let the microcontroller handle debouncing and event timing.
+Physical microcontrollers run on their own chip and connect over your Wi-Fi network. They cannot communicate with `127.0.0.1` or `localhost`, because from the ESP32's perspective, `127.0.0.1` points to itself.
+
+### 3.1 Step 1: Find your Computer's Local IPv4 Address
+In Windows Command Prompt (CMD) or PowerShell:
+```cmd
+ipconfig
+```
+Look for **IPv4 Address** under your active Wi-Fi or Ethernet adapter (e.g., `192.168.1.150`).
+
+### 3.2 Step 2: Bind the Backend to All Interfaces (0.0.0.0)
+Start the FastAPI backend listening on all network interfaces:
+```cmd
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### 3.3 Step 3: Allow Port 8000 in Windows Defender Firewall
+Run in PowerShell as Administrator (or configure via Windows Defender GUI):
+```powershell
+New-NetFirewallRule -DisplayName "SmartHome Backend 8000" -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
+```
+
+### 3.4 Step 4: Configure ESP32 Firmware
+In `esp32_sensor_node.ino`:
+```cpp
+const char* SERVER_BASE_URL = "http://192.168.1.150:8000/api"; // Replace with your host PC LAN IP
+```
 
 ---
 
-## 4. Testing Hardware Ingestion via cURL
+## 4. Hardware Deployment & Testing Status
 
-Before assembling physical hardware, you can verify the backend connection:
+> **Important Deployment Note**: Real physical hardware is **not currently connected**. You do not need physical sensors to test the complete software pipeline. Use the built-in simulator ("Quick Simulate", "Simulate Demo Batch") and the "Test Hardware Event" feature in the dashboard to test ingestion, MySQL storage, API retrieval, and real-time dashboard updates.
+
+### Recommended Hardware for Future Deployment:
+1. **Controller Board**: ESP32-WROOM-32 or ESP32-S3 DevKit.
+2. **Ambient Motion Sensor**: HC-SR501 PIR (set jumper to 'H' for repeatable trigger) or AM312 miniature PIR (3.3V).
+3. **Logic Levels**: ESP32 GPIOs operate at 3.3V. Ensure PIR OUT is 3.3V (HC-SR501 OUT is 3.3V even when powered by 5V VCC).
+4. **Wiring**:
+   - `VCC` -> ESP32 `VIN` (5V) or `3V3` (if 3.3V sensor)
+   - `GND` -> ESP32 `GND`
+   - `OUT` -> ESP32 `GPIO 13` (configured as INPUT_PULLDOWN with CHANGE interrupt)
+
+---
+
+## 5. Testing Hardware Ingestion via cURL or PowerShell
+
+Before assembling physical hardware, you can test hardware event ingestion from any computer on the local network:
 
 ```bash
-# 1. Ingest a Motion Detected Event
+# Ingest a Physical Hardware Motion Event
 curl -X POST http://127.0.0.1:8000/api/sensors/events \
   -H "Content-Type: application/json" \
   -d '{
+    "event_id": "test-hw-001",
     "sensor_id": "PIR_LIVING",
     "sensor_type": "motion",
     "sensor_state": "ON",
+    "location": "Living Room",
     "source": "hardware",
     "raw_value": 1.0,
-    "device_id": "curl-test-node"
+    "device_node_id": "esp32-node-01"
   }'
 
-# 2. Check Device Diagnostics
+# Check Device Diagnostics
 curl http://127.0.0.1:8000/api/sensors/device-status
 
-# 3. Check Live Status
+# Check Live Status
 curl http://127.0.0.1:8000/api/sensors/live-status
 ```

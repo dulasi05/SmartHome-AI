@@ -21,11 +21,14 @@
 const char* WIFI_SSID     = "YOUR_WIFI_SSID";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
-// SmartHome AI Server Endpoint (Adjust IP and port)
+// SmartHome AI Server Endpoint
+// IMPORTANT: Replace "192.168.1.100" with the local network IPv4 address of the host PC running FastAPI!
+// Run 'ipconfig' in Windows CMD/PowerShell to find your IPv4 address (e.g. 192.168.1.15).
+// DO NOT use 127.0.0.1 or localhost — from the ESP32's viewpoint, 127.0.0.1 is the ESP32 itself.
 const char* SERVER_BASE_URL = "http://192.168.1.100:8000/api";
 
-// Optional Device Authentication Token (matches DEVICE_API_KEY on server)
-const char* DEVICE_TOKEN    = "secret-token-12345";
+// Optional Device Authentication Token (matches DEVICE_API_KEY on server, leave blank if disabled)
+const char* DEVICE_TOKEN    = "";
 const char* DEVICE_ID       = "esp32-living-room";
 
 // ─── Pin Definitions ──────────────────────────────────────────────────────────
@@ -126,15 +129,22 @@ void sendSensorEvent(const char* sensorId, const char* sensorType, const char* s
     http.addHeader("X-Device-Token", DEVICE_TOKEN);
   }
 
+  // Generate a unique client event ID for idempotency/deduplication
+  char eventId[64];
+  snprintf(eventId, sizeof(eventId), "%s-%lu-%u", DEVICE_ID, millis(), (unsigned int)random(1000, 9999));
+
   // Construct JSON payload conforming to SmartHome AI schema
-  StaticJsonDocument<256> doc;
+  StaticJsonDocument<384> doc;
+  doc["event_id"] = eventId;
   doc["sensor_id"] = sensorId;
   doc["sensor_type"] = sensorType;
   doc["sensor_state"] = sensorState;
+  doc["location"] = "Living Room";
   doc["source"] = "hardware"; // CRITICAL: Marks event as physical hardware
   doc["resident_id"] = "R1";
   doc["raw_value"] = rawVal;
   doc["device_id"] = DEVICE_ID;
+  doc["device_node_id"] = DEVICE_ID;
 
   String requestBody;
   serializeJson(doc, requestBody);

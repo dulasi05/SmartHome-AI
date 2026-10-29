@@ -14,7 +14,7 @@ import { useToast } from '../hooks/useToast';
 
 const TIER_CONFIG = {
   CONFIRMED: {
-    label: 'Confirmed Alert',
+    label: 'Urgent Alert',
     color: 'var(--error)',
     bg: 'rgba(239,68,68,0.08)',
     border: 'rgba(239,68,68,0.3)',
@@ -22,7 +22,7 @@ const TIER_CONFIG = {
     badgeClass: 'badge-error',
   },
   NEEDS_REVIEW: {
-    label: 'Needs Review',
+    label: 'Review Recommended',
     color: 'var(--warning)',
     bg: 'rgba(245,158,11,0.08)',
     border: 'rgba(245,158,11,0.3)',
@@ -30,7 +30,7 @@ const TIER_CONFIG = {
     badgeClass: 'badge-warning',
   },
   LOGGED_NORMAL: {
-    label: 'Logged Normal',
+    label: 'Normal Routine Notice',
     color: 'var(--success)',
     bg: 'rgba(16,185,129,0.05)',
     border: 'rgba(16,185,129,0.15)',
@@ -140,7 +140,9 @@ export default function AlertCentre() {
   const [injectType, setInjectType] = useState('NIGHT_ACTIVITY');
   const [injectSeverity, setInjectSeverity] = useState('medium');
   const [prioritising, setPrioritising] = useState(false);
-  const [prioResident, setPrioResident] = useState('R1');
+  const [prioResident, setPrioResident] = useState(
+    () => localStorage.getItem('smartHome_residentId') || 'R1'
+  );
 
   const fetchAlerts = useCallback(async () => {
     try {
@@ -214,8 +216,8 @@ export default function AlertCentre() {
       <div className="page-header">
         <div className="page-header-inner">
           <div>
-            <h2>Alert Centre</h2>
-            <p>Confidence-aware three-tier anomaly alert prioritisation</p>
+            <h2>Alerts & Safety Notices</h2>
+            <p>Smart home activity notifications, routine safety checks, and family review logs</p>
           </div>
           <button className="btn btn-secondary btn-sm" onClick={fetchAlerts}>
             <RefreshCw size={14} /> Refresh
@@ -319,10 +321,13 @@ export default function AlertCentre() {
                   className="input"
                   style={{ width: '100%', padding: '6px 10px', fontSize: 13 }}
                   value={prioResident}
-                  onChange={e => setPrioResident(e.target.value)}
+                  onChange={e => {
+                    setPrioResident(e.target.value);
+                    localStorage.setItem('smartHome_residentId', e.target.value);
+                  }}
                 >
-                  <option value="R1">R1</option>
-                  <option value="R2">R2</option>
+                  <option value="R1">Resident 1 (Primary - R1)</option>
+                  <option value="R2">Resident 2 (Guest - R2)</option>
                 </select>
               </div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>

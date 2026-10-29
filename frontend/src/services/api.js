@@ -29,8 +29,11 @@ export const getActivityHistory = (residentId = 'R1', hours = 24) =>
 export const getSensorEvents = (params = {}) =>
   api.get('/sensors/events', { params }).then(r => r.data);
 
-export const postSensorEvent = (eventData) =>
-  api.post('/sensors/events', eventData).then(r => r.data);
+export const postSensorEvent = (eventData, headers = {}) =>
+  api.post('/sensors/events', eventData, { headers }).then(r => r.data);
+
+export const sendDevTestHardwareEvent = (eventData) =>
+  api.post('/sensors/devtest', eventData).then(r => r.data);
 
 export const getLiveSensorStatus = () =>
   api.get('/sensors/live-status').then(r => r.data);

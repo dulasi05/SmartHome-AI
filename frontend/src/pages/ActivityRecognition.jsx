@@ -52,7 +52,9 @@ export default function ActivityRecognition() {
   const [detail, setDetail] = useState(null);
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [residentId, setResidentId] = useState('R1');
+  const [residentId, setResidentId] = useState(
+    () => localStorage.getItem('smartHome_residentId') || 'R1'
+  );
 
   const fetchPredictions = async () => {
     try {
@@ -100,24 +102,27 @@ export default function ActivityRecognition() {
       <div className="page-header">
         <div className="page-header-inner">
           <div>
-            <h2>Activity Recognition</h2>
-            <p>Powerformer/WC-MHA predictions with MO-TLIME explanations — Layer 3: Intelligence</p>
+            <h2>Activity History & Recognition</h2>
+            <p>Chronological record of recognized household activities, detection confidence, and sensor contributions</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <select
               value={residentId}
-              onChange={e => setResidentId(e.target.value)}
+              onChange={e => {
+                setResidentId(e.target.value);
+                localStorage.setItem('smartHome_residentId', e.target.value);
+              }}
               style={{ fontSize: 13 }}
             >
-              <option value="R1">Resident R1</option>
-              <option value="R2">Resident R2</option>
+              <option value="R1">Resident 1 (Primary)</option>
+              <option value="R2">Resident 2 (Guest)</option>
             </select>
             <button className="btn btn-secondary btn-sm" onClick={fetchPredictions}>
               <RefreshCw size={14} /> Refresh
             </button>
             <button className="btn btn-primary btn-sm" onClick={handleRunPrediction} disabled={running}>
               {running ? <div className="spinner" style={{ width: 14, height: 14 }} /> : <Play size={14} />}
-              Run Prediction
+              Analyze Current Activity
             </button>
           </div>
         </div>
@@ -126,8 +131,7 @@ export default function ActivityRecognition() {
       <div className="page-body">
         <div className="demo-banner">
           <Cpu size={16} />
-          <strong>⚠️ DEMO MODE:</strong> These are heuristic predictions simulating Powerformer/WC-MHA output.
-          MO-TLIME explanations are approximations. All labeled <code>is_demo: true</code> in storage.
+          <strong>AI Status Note:</strong> Activity recognition is active using baseline rule inference. AI model training and checkpoint weights can be configured in Developer Tools.
         </div>
 
         <div className="grid-1-2">

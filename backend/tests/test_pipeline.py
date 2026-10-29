@@ -9,6 +9,7 @@ from datetime import datetime, timedelta
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 # Use an in-memory SQLite database for testing
 TEST_DB_URL = "sqlite:///:memory:"
@@ -18,41 +19,9 @@ import os
 os.environ["DATABASE_URL"] = TEST_DB_URL
 
 from app.main import app
-from app.core.database import Base, get_db
 from app.services.preprocessor import DataPreprocessor
 from app.services.simulator import SensorSimulator
 from app.services.intelligence import ActivityRecognitionEngine
-
-
-# ─── Test database setup ──────────────────────────────────────────────────────
-
-engine = create_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
-TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    db = TestSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-
-@pytest.fixture(autouse=True)
-def setup_db():
-    """Create all tables before each test, drop after."""
-    from app.models import db_models  # noqa
-    Base.metadata.create_all(bind=engine)
-    yield
-    Base.metadata.drop_all(bind=engine)
-
-
-@pytest.fixture
-def client():
-    return TestClient(app)
 
 
 # ─── Preprocessor tests ───────────────────────────────────────────────────────

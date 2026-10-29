@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.core.database import get_db
+from app.core.database import get_db, get_active_db_info
 from app.models.db_models import (
     SensorEvent, ActivityPrediction, AnomalyAlert, DatasetUpload, RoutineProfile, DeviceNode
 )
@@ -94,6 +94,7 @@ def get_dashboard_stats(
 
     return {
         "timestamp": datetime.utcnow().isoformat(),
+        "database": get_active_db_info(),
         "window_hours": hours,
         "sensor_events": {
             "total": total_events,
@@ -211,10 +212,10 @@ def _get_pipeline_status(db: Session) -> dict:
             {
                 "id": 4,
                 "name": "Storage Layer",
-                "technology": "SQLite via SQLAlchemy",
+                "technology": "MySQL (" + (get_active_db_info().get("mysql_database") or "smarthome") + ")" if get_active_db_info().get("is_mysql") else "SQLite via SQLAlchemy",
                 "status": "connected" if has_db else "error",
-                "status_label": "Connected" if has_db else "Error",
-                "details": "Stores predictions, events, anomalies, and routine profiles",
+                "status_label": "Connected (MySQL)" if get_active_db_info().get("is_mysql") else ("Connected" if has_db else "Error"),
+                "details": f"Active MySQL storage on {get_active_db_info().get('mysql_host')}:{get_active_db_info().get('mysql_port')}" if get_active_db_info().get("is_mysql") else "Stores predictions, events, anomalies, and routine profiles",
             },
             {
                 "id": 5,

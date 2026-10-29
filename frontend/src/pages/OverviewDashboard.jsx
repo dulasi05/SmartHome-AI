@@ -38,12 +38,13 @@ export default function OverviewDashboard() {
   const [activityHistory, setActivityHistory] = useState(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const activeResident = localStorage.getItem('smartHome_residentId') || 'R1';
 
   const fetchData = useCallback(async () => {
     try {
       const [s, h] = await Promise.all([
         getDashboardStats(24),
-        getActivityHistory('R1', 12),
+        getActivityHistory(activeResident, 12),
       ]);
       setStats(s);
       setActivityHistory(h);
@@ -52,7 +53,7 @@ export default function OverviewDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [addToast]);
+  }, [addToast, activeResident]);
 
   useEffect(() => {
     fetchData();
@@ -63,9 +64,9 @@ export default function OverviewDashboard() {
   const handleQuickSim = async () => {
     setRunning(true);
     try {
-      await simulateSensorEvents(15, 'R1');
-      await runPrediction('R1', 30);
-      addToast('✅ Simulated events and ran prediction!', 'success');
+      await simulateSensorEvents(15, activeResident);
+      await runPrediction(activeResident, 30);
+      addToast(`✅ Simulated events and ran prediction for ${activeResident}!`, 'success');
       await fetchData();
     } catch (err) {
       addToast(`Error: ${err.response?.data?.detail || err.message}`, 'error');
@@ -101,28 +102,29 @@ export default function OverviewDashboard() {
       <div className="page-header">
         <div className="page-header-inner">
           <div>
-            <h2>Overview Dashboard</h2>
-            <p>Real-time smart home activity monitoring — data retrieved from SQLite storage</p>
+            <h2>Home Overview Dashboard</h2>
+            <p>Real-time home activity monitoring and safety status — powered by live IoT sensors and MySQL storage</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-secondary btn-sm" onClick={fetchData}>
               <RefreshCw size={14} /> Refresh
             </button>
-            <button className="btn btn-primary btn-sm" onClick={handleQuickSim} disabled={running}>
+            <button className="btn btn-secondary btn-sm" onClick={handleQuickSim} disabled={running} title="Simulate sample sensor events for testing">
               {running ? <div className="spinner" style={{ width: 14, height: 14 }} /> : <Play size={14} />}
-              Quick Simulate
+              Test Simulation
             </button>
           </div>
         </div>
       </div>
 
       <div className="page-body">
-        {/* Demo banner */}
-        <div className="demo-banner">
-          <Cpu size={16} />
-          <strong>DEMO MODE:</strong> Predictions are heuristic simulations. The real Powerformer/WC-MHA model is not yet integrated.
-          All predictions are clearly labeled <code style={{ fontSize: 11 }}>is_demo: true</code> in the database.
-        </div>
+        {/* Activity Model Status Notice */}
+        {stats?.pipeline_status?.layers?.some(l => l.status === 'demo') && (
+          <div className="demo-banner">
+            <Cpu size={16} />
+            <strong>Activity Recognition Notice:</strong> System is operating in baseline heuristic demonstration mode. Full deep learning weights can be trained or loaded via Developer Tools.
+          </div>
+        )}
 
         {/* Stats row */}
         <div className="stats-grid">
@@ -146,7 +148,7 @@ export default function OverviewDashboard() {
             <div className="stat-value" style={{ color: 'var(--success)' }}>
               {stats?.predictions?.total?.toLocaleString() || 0}
             </div>
-            <div className="stat-label">Predictions Made</div>
+            <div className="stat-label">Activities Recognized</div>
             <div className="stat-change">{stats?.predictions?.recent_count || 0} in last 24h</div>
           </div>
 
@@ -158,7 +160,7 @@ export default function OverviewDashboard() {
               {activeAlerts}
             </div>
             <div className="stat-label">Active Alerts</div>
-            <div className="stat-change">{stats?.anomalies?.total || 0} total anomalies</div>
+            <div className="stat-change">{stats?.anomalies?.total || 0} total notices</div>
           </div>
 
           <div className="stat-card" style={{ '--gradient': 'linear-gradient(90deg, #a855f7, #5b8dee)' }}>
@@ -168,8 +170,8 @@ export default function OverviewDashboard() {
             <div className="stat-value" style={{ color: 'var(--demo)' }}>
               {stats?.datasets?.upload_count || 0}
             </div>
-            <div className="stat-label">Uploaded Datasets</div>
-            <div className="stat-change">ARAS / CASAS / Custom</div>
+            <div className="stat-label">Training Datasets</div>
+            <div className="stat-change">Managed in Dev Tools</div>
           </div>
         </div>
 
@@ -318,12 +320,12 @@ export default function OverviewDashboard() {
             )}
           </div>
 
-          {/* Pipeline health */}
+          {/* System health */}
           <div className="card">
             <div className="card-header">
               <div className="card-title">
                 <Cpu size={16} />
-                Pipeline Health
+                System Health & Core Services
               </div>
             </div>
             {stats?.pipeline_status?.layers?.map(layer => (
@@ -356,19 +358,28 @@ export default function OverviewDashboard() {
         {/* Residents */}
         {stats?.residents?.length > 0 && (
           <div className="card">
-            <div className="card-header">
-              <div className="card-title">Active Residents</div>
+            <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div className="card-title">Household Members</div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Active Profile: <strong>{activeResident}</strong>
+              </span>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              {stats.residents.map(r => (
-                <div key={r} style={{
-                  background: 'var(--primary-glow)', border: '1px solid rgba(91,141,238,0.25)',
-                  borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 600,
-                  color: 'var(--primary-light)',
-                }}>
-                  👤 {r}
-                </div>
-              ))}
+              {stats.residents.map(r => {
+                const isSelected = r === activeResident;
+                return (
+                  <div key={r} style={{
+                    background: isSelected ? 'var(--primary-glow)' : 'var(--bg-elevated)',
+                    border: isSelected ? '2px solid var(--primary)' : '1px solid var(--border)',
+                    borderRadius: 10, padding: '8px 16px', fontSize: 13, fontWeight: 600,
+                    color: isSelected ? 'var(--primary-light)' : 'var(--text-secondary)',
+                    display: 'flex', alignItems: 'center', gap: 8
+                  }}>
+                    <span>👤 {r} {r === 'R1' ? '(Primary)' : '(Guest)'}</span>
+                    {isSelected && <span className="badge badge-success" style={{ fontSize: 10 }}>ACTIVE</span>}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

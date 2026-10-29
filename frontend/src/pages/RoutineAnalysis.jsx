@@ -27,7 +27,9 @@ const ACTIVITY_EMOJIS = {
 
 export default function RoutineAnalysis() {
   const { addToast } = useToast();
-  const [residentId, setResidentId] = useState('R1');
+  const [residentId, setResidentId] = useState(
+    () => localStorage.getItem('smartHome_residentId') || 'R1'
+  );
   const [profile, setProfile] = useState(null);
   const [history, setHistory] = useState(null);
   const [recentPreds, setRecentPreds] = useState([]);
@@ -88,9 +90,16 @@ export default function RoutineAnalysis() {
             <p>Daily activity profiles and historical patterns per resident</p>
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <select value={residentId} onChange={e => setResidentId(e.target.value)} style={{ fontSize: 13 }}>
-              <option value="R1">Resident R1</option>
-              <option value="R2">Resident R2</option>
+            <select 
+              value={residentId} 
+              onChange={e => {
+                setResidentId(e.target.value);
+                localStorage.setItem('smartHome_residentId', e.target.value);
+              }} 
+              style={{ fontSize: 13 }}
+            >
+              <option value="R1">Resident 1 (Primary)</option>
+              <option value="R2">Resident 2 (Guest)</option>
             </select>
             <button className="btn btn-secondary btn-sm" onClick={fetchData}>
               <RefreshCw size={14} /> Refresh

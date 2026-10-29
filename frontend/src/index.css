@@ -68,9 +68,66 @@
   --transition-slow: 400ms ease;
 }
 
+/* ══════════════════════════════════════════════════════════════════
+   Light Theme Variable Overrides ([data-theme="light"])
+   ══════════════════════════════════════════════════════════════════ */
+[data-theme="light"], body[data-theme="light"] {
+  /* Color palette — Clean modern light mode */
+  --bg-base: #f8fafc;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f1f5f9;
+  --bg-overlay: rgba(255, 255, 255, 0.96);
+  --border: #e2e8f0;
+  --border-active: #93c5fd;
+
+  /* Primary — vivid blue with high contrast */
+  --primary: #2563eb;
+  --primary-light: #3b82f6;
+  --primary-glow: rgba(37, 99, 235, 0.12);
+  --primary-dark: #1d4ed8;
+
+  /* Accent colors */
+  --accent-cyan: #0284c7;
+  --accent-purple: #9333ea;
+  --accent-emerald: #059669;
+  --accent-amber: #d97706;
+  --accent-rose: #e11d48;
+  --accent-orange: #ea580c;
+
+  /* Semantic colors */
+  --success: #059669;
+  --success-bg: rgba(5, 150, 105, 0.12);
+  --warning: #d97706;
+  --warning-bg: rgba(217, 119, 6, 0.12);
+  --error: #e11d48;
+  --error-bg: rgba(225, 29, 72, 0.12);
+  --info: #2563eb;
+  --info-bg: rgba(37, 99, 235, 0.12);
+  --demo: #7c3aed;
+  --demo-bg: rgba(124, 58, 237, 0.12);
+
+  /* Typography / Text colors */
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --text-inverse: #ffffff;
+
+  /* Shadows for light mode */
+  --shadow-sm: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-md: 0 4px 16px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-lg: 0 10px 30px rgba(15, 23, 42, 0.12), 0 4px 8px rgba(15, 23, 42, 0.06);
+  --shadow-glow: 0 0 24px rgba(37, 99, 235, 0.12);
+}
+
 /* ── Reset ── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { font-size: 16px; scroll-behavior: smooth; }
+
+/* Smooth theme transition */
+html, body, .sidebar, .card, .stat-card, .btn, input, select, textarea, .data-table, .data-table th, .data-table td, .filters-bar, .system-status-mini {
+  transition: background-color var(--transition-base), border-color var(--transition-base), color var(--transition-base), box-shadow var(--transition-base);
+}
 
 body {
   font-family: var(--font-sans);
@@ -1136,3 +1193,248 @@ input:focus, select:focus, textarea:focus { border-color: var(--border-active); 
   border-radius: var(--radius-sm) !important;
   font-size: 12px !important;
 }
+
+/* ══════════════════════════════════════
+   Light Mode Specific Tweaks
+   ══════════════════════════════════════ */
+[data-theme="light"] input,
+[data-theme="light"] select,
+[data-theme="light"] textarea {
+  background: #ffffff;
+  border-color: #cbd5e1;
+  color: #0f172a;
+}
+[data-theme="light"] input:focus,
+[data-theme="light"] select:focus,
+[data-theme="light"] textarea:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+[data-theme="light"] .card {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+[data-theme="light"] .card:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08);
+}
+
+[data-theme="light"] .stat-card {
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+[data-theme="light"] .stat-card:hover {
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.1);
+}
+
+[data-theme="light"] .sidebar {
+  box-shadow: 2px 0 12px rgba(15, 23, 42, 0.04);
+}
+
+[data-theme="light"] .nav-item {
+  color: #475569;
+}
+[data-theme="light"] .nav-item:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+[data-theme="light"] .nav-item.active {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+[data-theme="light"] .data-table th {
+  background: #f8fafc;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+}
+[data-theme="light"] .data-table td {
+  border-bottom: 1px solid #f1f5f9;
+  color: #334155;
+}
+[data-theme="light"] .data-table tbody tr:hover td {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+[data-theme="light"] .badge-neutral {
+  background: #f1f5f9;
+  color: #475569;
+  border-color: #cbd5e1;
+}
+[data-theme="light"] .badge-hardware {
+  background: rgba(5, 150, 105, 0.12);
+  color: #047857;
+  border-color: rgba(5, 150, 105, 0.3);
+}
+
+[data-theme="light"] .btn-secondary {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: #cbd5e1;
+}
+[data-theme="light"] .btn-secondary:hover {
+  background: #f8fafc;
+  border-color: #94a3b8;
+}
+
+[data-theme="light"] .btn-ghost:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+[data-theme="light"] .demo-banner {
+  background: linear-gradient(135deg, rgba(147, 51, 234, 0.08) 0%, rgba(37, 99, 235, 0.05) 100%);
+  border-color: rgba(147, 51, 234, 0.25);
+  color: #7c3aed;
+}
+
+[data-theme="light"] .filters-bar {
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+}
+
+[data-theme="light"] .recharts-cartesian-grid-horizontal line,
+[data-theme="light"] .recharts-cartesian-grid-vertical line {
+  stroke: rgba(148, 163, 184, 0.25) !important;
+}
+[data-theme="light"] .recharts-text {
+  fill: #64748b !important;
+}
+[data-theme="light"] .recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12) !important;
+}
+
+/* ══════════════════════════════════════
+   Theme Switcher Components
+   ══════════════════════════════════════ */
+
+.theme-toggle-container {
+  margin-bottom: 12px;
+}
+
+.theme-toggle-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.theme-toggle-btn:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-active);
+  transform: translateY(-1px);
+}
+
+.theme-toggle-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--primary-glow);
+  color: var(--primary-light);
+  flex-shrink: 0;
+  transition: all var(--transition-base);
+}
+
+[data-theme="light"] .theme-toggle-icon {
+  background: rgba(245, 158, 11, 0.15);
+  color: #d97706;
+}
+
+.theme-toggle-text {
+  flex: 1;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.theme-toggle-track {
+  width: 36px;
+  height: 20px;
+  background: rgba(99, 140, 255, 0.2);
+  border-radius: 20px;
+  position: relative;
+  transition: background var(--transition-base);
+  flex-shrink: 0;
+  padding: 2px;
+}
+
+[data-theme="light"] .theme-toggle-track {
+  background: #cbd5e1;
+}
+
+.theme-toggle-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--primary);
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform var(--transition-fast), background var(--transition-base);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+[data-theme="light"] .theme-toggle-thumb {
+  transform: translateX(16px);
+  background: #f59e0b;
+}
+
+/* Floating top-right theme button */
+.theme-floating-toggle {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  z-index: 990;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 30px;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.theme-floating-toggle:hover {
+  background: var(--bg-card-hover);
+  border-color: var(--border-active);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg), var(--shadow-glow);
+}
+
+.theme-floating-toggle svg {
+  color: var(--primary-light);
+  transition: transform var(--transition-base);
+}
+
+[data-theme="light"] .theme-floating-toggle svg {
+  color: #d97706;
+}
+
+.theme-floating-toggle:hover svg {
+  transform: rotate(20deg);
+}
+

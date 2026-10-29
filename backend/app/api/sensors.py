@@ -20,11 +20,12 @@ from app.services.simulator import simulator, SENSOR_DEFINITIONS, SENSOR_ID_TO_D
 
 router = APIRouter(prefix="/sensors", tags=["sensors"])
 
-# ─── Thread-Safe Debounce Cache ────────────────────────────────────────────────
-# Prevents bouncing physical sensors (e.g., PIR sensors) from flooding duplicates
-# Key: (sensor_id, sensor_state, source) -> (timestamp_epoch, event_id)
+# ─── Thread-Safe Debounce & Deduplication Cache ────────────────────────────────
+# 1. Sliding window debounce: Prevents bouncing physical sensors (e.g. PIR) from flooding
+# 2. Event ID cache: Prevents resending the exact same unique event payload
 _DEBOUNCE_LOCK = threading.Lock()
 _RECENT_EVENTS_CACHE: Dict[tuple[str, str, str], tuple[float, int]] = {}
+_EVENT_IDS_SEEN: Dict[str, tuple[float, int]] = {}
 DEBOUNCE_WINDOW_SECONDS = 1.0
 
 
@@ -35,11 +36,14 @@ class SensorEventCreate(BaseModel):
     sensor_id: str = Field(..., min_length=1, max_length=64, description="Unique sensor identifier e.g. PIR_KITCHEN or ESP32_PIR_01")
     sensor_type: str = Field(..., min_length=1, max_length=64, description="Sensor modality e.g. motion, door, temperature")
     sensor_state: str = Field(..., min_length=1, max_length=64, description="Binary or categorical state e.g. ON, OFF, OPEN, CLOSED, DETECTED")
-    resident_id: Optional[str] = "R1"
+    location: Optional[str] = Field(None, max_length=128, description="Room or installation location e.g. Kitchen, Living Room")
+    resident_id: Optional[str] = Field("R1", max_length=64, description="Resident identifier")
     activity_label: Optional[str] = None  # None for raw hardware events; not automatically inferred
     source: str = Field("api", description="hardware | simulator | dataset | api")
     raw_value: Optional[float] = None
-    device_id: Optional[str] = None
+    device_id: Optional[str] = Field(None, max_length=64, description="Device controller identifier e.g. esp32-node-01")
+    device_node_id: Optional[str] = Field(None, max_length=64, description="Alias for device_id (ESP32 node identifier)")
+    event_id: Optional[str] = Field(None, max_length=128, description="Unique event identifier for idempotency/deduplication")
 
     @field_validator("sensor_id")
     @classmethod
@@ -247,30 +251,40 @@ def get_sensor_events(
     }
 
 
-@router.post("/events")
-def ingest_sensor_event(
+def _ingest_event_internal(
     event: SensorEventCreate,
-    db: Session = Depends(get_db),
-    x_device_token: Optional[str] = Header(None, alias="X-Device-Token"),
-    authorization: Optional[str] = Header(None, alias="Authorization"),
-    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
-):
+    device_token: Optional[str] = None,
+    authorization: Optional[str] = None,
+    x_api_key: Optional[str] = None,
+    db: Session = None,
+) -> dict:
     """
-    Ingest a single sensor event into the Data Layer.
-    Supports physical hardware (source='hardware'), simulator, and API clients.
-    Includes debounce handling and automatic device node registration.
+    Core ingestion logic shared by the physical hardware endpoint and the dev-test endpoint.
+    Handles auth validation, idempotency deduplication, debounce suppression,
+    database persistence, metadata registration, and device node tracking.
     """
     auth_info = verify_device_auth(
         source=event.source,
-        x_device_token=x_device_token,
+        x_device_token=device_token,
         authorization=authorization,
         x_api_key=x_api_key,
     )
 
-    # Duplicate / Bounce suppression
     now_epoch = datetime.now(timezone.utc).timestamp()
-    debounce_key = (event.sensor_id, event.sensor_state, event.source)
     with _DEBOUNCE_LOCK:
+        if event.event_id and event.event_id in _EVENT_IDS_SEEN:
+            last_ts, last_id = _EVENT_IDS_SEEN[event.event_id]
+            return {
+                "id": last_id,
+                "status": "duplicate_ignored",
+                "debounced": True,
+                "event_id": event.event_id,
+                "sensor_id": event.sensor_id,
+                "sensor_state": event.sensor_state,
+                "message": f"Duplicate event ID '{event.event_id}' already processed",
+            }
+
+        debounce_key = (event.sensor_id, event.sensor_state, event.source)
         if debounce_key in _RECENT_EVENTS_CACHE:
             last_ts, last_id = _RECENT_EVENTS_CACHE[debounce_key]
             if (now_epoch - last_ts) < DEBOUNCE_WINDOW_SECONDS:
@@ -278,6 +292,7 @@ def ingest_sensor_event(
                     "id": last_id,
                     "status": "duplicate_ignored",
                     "debounced": True,
+                    "event_id": event.event_id,
                     "sensor_id": event.sensor_id,
                     "sensor_state": event.sensor_state,
                     "message": f"Duplicate event suppressed within {DEBOUNCE_WINDOW_SECONDS}s debounce window",
@@ -299,44 +314,89 @@ def ingest_sensor_event(
     db.commit()
     db.refresh(db_event)
 
-    # Update debounce cache
     with _DEBOUNCE_LOCK:
         _RECENT_EVENTS_CACHE[debounce_key] = (now_epoch, db_event.id)
-        # Purge old cache entries if it grows large
+        if event.event_id:
+            _EVENT_IDS_SEEN[event.event_id] = (now_epoch, db_event.id)
+
         if len(_RECENT_EVENTS_CACHE) > 500:
             cutoff = now_epoch - 10.0
             stale_keys = [k for k, v in _RECENT_EVENTS_CACHE.items() if v[0] < cutoff]
             for k in stale_keys:
                 _RECENT_EVENTS_CACHE.pop(k, None)
+        if len(_EVENT_IDS_SEEN) > 2000:
+            cutoff_ids = now_epoch - 3600.0
+            stale_ids = [k for k, v in _EVENT_IDS_SEEN.items() if v[0] < cutoff_ids]
+            for k in stale_ids:
+                _EVENT_IDS_SEEN.pop(k, None)
 
-    # If source is hardware, register or refresh hardware device node
-    if event.source == "hardware":
-        dev_id = event.device_id or f"device-{event.sensor_id.split('_')[0].lower()}"
-        _touch_device_node(db, device_id=dev_id, increment_events=True)
+    dev_id = event.device_node_id or event.device_id or (
+        f"device-{event.sensor_id.split('_')[0].lower()}" if event.source == "hardware" else None
+    )
 
-        # Auto-register sensor in metadata if unknown
-        existing_meta = db.query(SensorMetadata).filter(SensorMetadata.sensor_id == event.sensor_id).first()
-        if not existing_meta:
-            new_meta = SensorMetadata(
-                sensor_id=event.sensor_id,
-                sensor_type=event.sensor_type,
-                location=SENSOR_ID_TO_DEF.get(event.sensor_id, {}).get("location") or "Unassigned",
-                description="Auto-registered hardware sensor",
-                is_active=True,
-                dataset_source="hardware",
-            )
-            db.add(new_meta)
+    resolved_location = event.location
+    existing_meta = db.query(SensorMetadata).filter(SensorMetadata.sensor_id == event.sensor_id).first()
+    if not existing_meta:
+        default_loc = event.location or SENSOR_ID_TO_DEF.get(event.sensor_id, {}).get("location") or "Unassigned"
+        new_meta = SensorMetadata(
+            sensor_id=event.sensor_id,
+            sensor_type=event.sensor_type,
+            location=default_loc,
+            description=f"Auto-registered {event.source} sensor",
+            is_active=True,
+            dataset_source=event.source,
+        )
+        db.add(new_meta)
+        db.commit()
+        resolved_location = default_loc
+    else:
+        if event.location and (not existing_meta.location or existing_meta.location in ["Unassigned", "Unknown"]):
+            existing_meta.location = event.location
             db.commit()
+            resolved_location = event.location
+        elif not resolved_location:
+            resolved_location = existing_meta.location
+
+    if event.source == "hardware" and dev_id:
+        _touch_device_node(db, device_id=dev_id, increment_events=True)
 
     return {
         "id": db_event.id,
         "status": "ingested",
         "sensor_id": db_event.sensor_id,
+        "sensor_type": db_event.sensor_type,
         "sensor_state": db_event.sensor_state,
+        "location": resolved_location,
+        "resident_id": db_event.resident_id,
+        "device_node_id": dev_id,
         "source": db_event.source,
+        "raw_value": db_event.raw_value,
         "timestamp": db_event.timestamp.isoformat(),
+        "event_id": event.event_id,
         "auth": auth_info["auth_mode"],
     }
+
+
+@router.post("/events")
+def ingest_sensor_event(
+    event: SensorEventCreate,
+    db: Session = Depends(get_db),
+    x_device_token: Optional[str] = Header(None, alias="X-Device-Token"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+):
+    """
+    Ingest a single sensor event into the Data Layer.
+    Supports physical hardware (source='hardware'), simulator, and API clients.
+    Includes debounce handling and automatic device node registration.
+    """
+    return _ingest_event_internal(
+        event=event,
+        device_token=x_device_token,
+        authorization=authorization,
+        x_api_key=x_api_key,
+        db=db,
+    )
 
 
 @router.post("/heartbeat")
@@ -604,7 +664,127 @@ def generate_historical_data(
     }
 
 
+# ─── Dev-Only Hardware Test Endpoint ─────────────────────────────────────────
+
+class DevTestHardwareEventCreate(BaseModel):
+    """Payload for the development-only hardware test endpoint."""
+    sensor_id: str = Field(..., min_length=1, max_length=64)
+    sensor_type: str = Field("motion", min_length=1, max_length=64)
+    sensor_state: str = Field("ON", min_length=1, max_length=64)
+    location: Optional[str] = Field(None, max_length=128)
+    resident_id: Optional[str] = Field("R1", max_length=64)
+    source: Optional[str] = Field("hardware", max_length=32)
+    raw_value: Optional[float] = None
+    device_id: Optional[str] = Field("devtest-node-01", max_length=64)
+    event_id: Optional[str] = Field(None, max_length=128)
+
+    @field_validator("sensor_id")
+    @classmethod
+    def _clean_sensor_id(cls, v: str) -> str:
+        clean = v.strip().upper()
+        if not clean:
+            raise ValueError("sensor_id cannot be blank")
+        return clean
+
+    @field_validator("sensor_type")
+    @classmethod
+    def _clean_sensor_type(cls, v: str) -> str:
+        return v.strip().lower()
+
+    @field_validator("sensor_state")
+    @classmethod
+    def _clean_sensor_state(cls, v: str) -> str:
+        return v.strip().upper()
+
+
+@router.post(
+    "/devtest",
+    summary="[DEV ONLY] Inject a hardware sensor event without client-side auth token",
+    description=(
+        "**Development-only endpoint. Disabled when APP_ENV=production.**\n\n"
+        "Reads `DEVICE_API_KEY` from the server environment and applies it "
+        "internally. The secret is **never** returned to the client or passed "
+        "through the browser. Only accessible from localhost (no X-Forwarded-For)."
+    ),
+    tags=["sensors"],
+)
+def dev_test_hardware_event(
+    payload: DevTestHardwareEventCreate,
+    x_forwarded_for: Optional[str] = Header(None, alias="X-Forwarded-For"),
+    db: Session = Depends(get_db),
+):
+    """
+    Development-only hardware event test endpoint.
+
+    Security guarantees
+    -------------------
+    - Disabled entirely when APP_ENV=production.
+    - Rejects requests that arrive via a reverse-proxy (X-Forwarded-For present).
+    - Reads DEVICE_API_KEY from server env; never returns or logs it.
+    - Routes through the identical ingestion pipeline a real ESP32 uses,
+      including auth, debounce, DB write, and device-node registration.
+    """
+    # 1. Production guard
+    app_env = os.environ.get("APP_ENV", "development").lower().strip()
+    if app_env == "production":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This endpoint is disabled in production. "
+                "Physical hardware devices must send X-Device-Token "
+                "to POST /api/sensors/events."
+            ),
+        )
+
+    # 2. Localhost-only guard
+    # If X-Forwarded-For is present the request arrived via a proxy,
+    # meaning it is not a direct localhost connection.
+    if x_forwarded_for:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This endpoint is only accessible from localhost. Remote access is not permitted.",
+        )
+
+    # 3. Require DEVICE_API_KEY to be configured server-side
+    configured_key = os.environ.get("DEVICE_API_KEY")
+    if not configured_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "DEVICE_API_KEY is not configured in the backend environment. "
+                "Set it in backend/.env to enable hardware authentication testing."
+            ),
+        )
+
+    # 4. Build the canonical SensorEventCreate and run the real ingestion helper
+    inner_event = SensorEventCreate(
+        event_id=payload.event_id,
+        sensor_id=payload.sensor_id,
+        sensor_type=payload.sensor_type,
+        sensor_state=payload.sensor_state,
+        location=payload.location,
+        resident_id=payload.resident_id,
+        source="hardware",
+        raw_value=payload.raw_value,
+        device_id=payload.device_id,
+        device_node_id=payload.device_id,
+    )
+
+    result = _ingest_event_internal(
+        event=inner_event,
+        device_token=configured_key,
+        db=db,
+    )
+    result["devtest"] = True
+    result["note"] = (
+        "Ingested via server-side dev-test endpoint. "
+        "DEVICE_API_KEY was applied on the server — never exposed to the browser."
+    )
+    return result
+
+
 @router.get("/metadata")
+
 def get_sensor_metadata(db: Session = Depends(get_db)):
     """Return known sensor definitions and metadata registry."""
     sensors = db.query(SensorMetadata).all()
